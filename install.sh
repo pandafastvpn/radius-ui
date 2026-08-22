@@ -8,7 +8,7 @@ INSTALL_DIR=$(pwd)
 set -e
 
 echo "=========================================================="
-echo "ðŸš€ RADIUS-UI SECURE AUTOMATED INSTALLER"
+echo "RADIUS-UI SECURE AUTOMATED INSTALLER"
 echo "=========================================================="
 
 echo "[1/8] Updating system and installing basic dependencies..."
@@ -38,120 +38,16 @@ curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
 apt-get install -y nodejs
 npm install -g pm2
 
-echo "[4/8] Installing Nginx, FreeRADIUS, and network components..."
-apt-get install -y nginx freeradius freeradius-mysql freeradius-utils wireguard iptables strongswan xl2tpd ppp
-
-echo "[*] Setting up WireGuard wg0 interface..."
-umask 077
-wg genkey | tee /etc/wireguard/privatekey | wg pubkey > /etc/wireguard/publickey
-cat << 'EOF' > /etc/wireguard/wg0.conf
-[Interface]
-Address = 10.8.0.1/24
-ListenPort = 51820
-SaveConfig = true
-EOF
-echo "PrivateKey = $(cat /etc/wireguard/privatekey)" >> /etc/wireguard/wg0.conf
-sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf
-sysctl -p
-systemctl stop wg-quick@wg0 || true
-systemctl disable wg-quick@wg0 || true
-
-echo "[*] Setting up L2TP/IPsec (xl2tpd & strongswan)..."
-cat << 'EOF' > /etc/ipsec.conf
-config setup
-    charondebug="ike 1, knl 1, cfg 0"
-    uniqueids=no
-
-conn L2TP-PSK-NAT
-    rightsubnet=vhost:%priv
-    also=L2TP-PSK-noNAT
-
-conn L2TP-PSK-noNAT
-    authby=secret
-    pfs=no
-    auto=add
-    keyingtries=3
-    rekey=no
-    ikelifetime=8h
-    keylife=1h
-    type=transport
-    left=%any
-    leftprotoport=17/1701
-    right=%any
-    rightprotoport=17/%any
-EOF
-
-cat << 'EOF' > /etc/ipsec.secrets
-%any %any : PSK "rahasia"
-EOF
-
-cat << 'EOF' > /etc/xl2tpd/xl2tpd.conf
-[global]
-ipsec saref = yes
-port = 1701
-
-[lns default]
-ip range = 10.9.0.2-10.9.0.254
-local ip = 10.9.0.1
-require chap = yes
-refuse pap = yes
-require authentication = yes
-name = LinuxVPNserver
-ppp debug = yes
-pppoptfile = /etc/ppp/options.xl2tpd
-length bit = yes
-EOF
-
-cat << 'EOF' > /etc/ppp/options.xl2tpd
-ipcp-accept-local
-ipcp-accept-remote
-ms-dns 8.8.8.8
-ms-dns 8.8.4.4
-noccp
-auth
-mtu 1280
-mru 1280
-nodefaultroute
-debug
-proxyarp
-connect-delay 5000
-plugin radius.so
-plugin radattr.so
-radius-config-file /etc/radiusclient/radiusclient.conf
-EOF
-
-echo "[*] Configuring radiusclient for PPP RADIUS Auth..."
-mkdir -p /etc/radiusclient
-cat << 'EOF' > /etc/radiusclient/radiusclient.conf
-auth_order      radius
-login_tries     4
-login_timeout   60
-nologin /etc/nologin
-issue   /etc/radiusclient/issue
-authserver      localhost:1812
-acctserver      localhost:1813
-servers         /etc/radiusclient/servers
-dictionary      /etc/freeradius/3.0/dictionary
-default_realm
-radius_timeout  10
-radius_retries  3
-bindaddr *
-EOF
-
-cat << 'EOF' > /etc/radiusclient/servers
-localhost testing123
-EOF
-
-systemctl stop strongswan-starter || true
-systemctl disable strongswan-starter || true
-systemctl stop xl2tpd || true
-systemctl disable xl2tpd || true
+echo "[4/8] Installing Nginx and FreeRADIUS..."
+apt-get install -y nginx freeradius freeradius-mysql freeradius-utils
 
 umask 022
 
+echo "[*] Continuing with FreeRADIUS database configuration..."
 if [ -f /etc/freeradius/3.0/mods-config/sql/main/mysql/schema.sql ]; then
     mysql radius_db < /etc/freeradius/3.0/mods-config/sql/main/mysql/schema.sql
-    mysql radius_db < /etc/freeradius/3.0/mods-config/sql/main/mysql/setup.sql || true
+    # schema.sql creates radcheck, radreply, radusergroup and radacct.
+    # Do not run the vendor setup.sql: it targets an example database named `radius`.
 fi
 
 cd /etc/freeradius/3.0/mods-enabled/
@@ -167,8 +63,12 @@ sed -i 's/^.*radius_db = "radius".*/\tradius_db = "radius_db"/' /etc/freeradius/
 sed -i '/^.*tls {/,/^.*}/ s/^/#/' /etc/freeradius/3.0/mods-available/sql
 sed -i 's/^#\s*read_clients = yes/read_clients = yes/' /etc/freeradius/3.0/mods-available/sql
 
-sed -i 's/-sql/sql/g' /etc/freeradius/3.0/sites-available/default
-sed -i 's/-sql/sql/g' /etc/freeradius/3.0/sites-available/inner-tunnel
+# Ensure the SQL module handles authorization and every accounting packet
+# (Start, Interim-Update, Stop) before FreeRADIUS is started.
+bash "$INSTALL_DIR/scripts/fix-freeradius.sh"
+
+# Fail installation instead of silently leaving a non-accounting server.
+freeradius -XC
 chown -R freerad:freerad /etc/freeradius/3.0/
 
 systemctl enable nginx
@@ -198,17 +98,10 @@ rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR"
 cp -r "$INSTALL_DIR/"* "$APP_DIR/"
 
-echo "[*] Initializing Git repository for Auto-Update feature..."
-cd "$APP_DIR"
-git init
-git remote add origin https://github.com/desienkz-slp/radius-ui.git
-git fetch origin
-git reset --hard origin/main
-git branch -M main
-git config --global --add safe.directory "$APP_DIR"
+echo "[*] Using uploaded source files (no remote fetch)..."
 chown -R www-data:www-data "$APP_DIR"
 
-echo "[*] Running FreeRADIUS fixes from latest repo..."
+echo "[*] Running FreeRADIUS fixes from local source..."
 bash "$APP_DIR/scripts/fix-freeradius.sh"
 
 echo "[6/8] Setting up Node.js Backend..."
@@ -268,31 +161,13 @@ ufw default allow outgoing
 ufw allow 22/tcp      # SSH
 ufw allow 80/tcp      # HTTP Web UI
 ufw allow 443/tcp     # HTTPS
+ufw allow 3000/tcp    # API / Web App
+ufw allow 3000/udp    # API / Web App
 ufw allow 1812/udp    # FreeRADIUS Auth
 ufw allow 1813/udp    # FreeRADIUS Acct
 ufw allow 3799/udp    # FreeRADIUS CoA
-ufw allow 51820/udp   # WireGuard
-ufw allow 500/udp     # IPsec IKE
-ufw allow 4500/udp    # IPsec NAT-T
-ufw allow 1701/udp    # L2TP
-
-echo "[*] Configuring UFW NAT Masquerade and Forwarding..."
-sed -i 's/DEFAULT_FORWARD_POLICY="DROP"/DEFAULT_FORWARD_POLICY="ACCEPT"/' /etc/default/ufw
-
-cat << 'EOF' > /etc/ufw/before.rules.tmp
-*nat
-:POSTROUTING ACCEPT [0:0]
--A POSTROUTING -s 10.8.0.0/24 -j MASQUERADE
--A POSTROUTING -s 10.9.0.0/24 -j MASQUERADE
-COMMIT
-EOF
-cat /etc/ufw/before.rules >> /etc/ufw/before.rules.tmp
-mv /etc/ufw/before.rules.tmp /etc/ufw/before.rules
 
 ufw --force enable
-
-echo "[*] VPN services are installed but disabled by default."
-echo "[*] You can start them from the Radius-UI Dashboard."
 
 echo "=========================================================="
 echo "âœ… SECURE INSTALLATION COMPLETE!"
