@@ -19,10 +19,10 @@ FreeRADIUS带面板的一键安装，改造基于https://github.com/desienkz-slp
 
 
 安装完成后，在浏览器中访问服务器的IP地址（或者域名）。
-'http://192.168.1.10' （替换自己的ip或域名）
 
 
 
+-'http://192.168.1.10' （替换自己的ip或域名）
 - **默认用户名**: `superadmin`
 - **默认密码**: `admin123`
 
