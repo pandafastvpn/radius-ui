@@ -11,8 +11,7 @@ Sistem Manajemen Jaringan berbasis Web UI untuk otentikasi (FreeRADIUS).
    apt update && apt install git -y
    git clone https://github.com/desienkz-slp/radius-ui.git
    cd radius-ui
-   chmod +x install.sh
-   ./install.sh
+   sudo bash install.sh
    ```
 4. Tunggu hingga proses selesai. Semua *service* (Nginx, MariaDB, Node.js, FreeRADIUS) akan dipasang otomatis.
 
