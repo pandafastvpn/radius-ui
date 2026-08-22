@@ -13,7 +13,7 @@ FreeRADIUS带面板的一键安装，改造基于https://github.com/desienkz-slp
    cd radius-ui
    sudo bash install.sh
    ```
-4. 等待流程完成。所有服务（Nginx、MariaDB、Node.js、FreeRADIUS、WireGuard、L2TP）都将自动完成安装。
+4. 等待流程完成。所有服务（Nginx、MariaDB、Node.js、FreeRADIUS）都将自动完成安装。
 
 ## 默认登录信息
 
