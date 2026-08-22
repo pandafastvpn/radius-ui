@@ -161,8 +161,6 @@ ufw default allow outgoing
 ufw allow 22/tcp      # SSH
 ufw allow 80/tcp      # HTTP Web UI
 ufw allow 443/tcp     # HTTPS
-ufw allow 3000/tcp    # API / Web App
-ufw allow 3000/udp    # API / Web App
 ufw allow 1812/udp    # FreeRADIUS Auth
 ufw allow 1813/udp    # FreeRADIUS Acct
 ufw allow 3799/udp    # FreeRADIUS CoA
