@@ -1,64 +1,34 @@
 ﻿# NETORA-Radius
 
-Sistem Manajemen Jaringan berbasis Web UI untuk otentikasi (FreeRADIUS).
+FreeRADIUS带面板的一键安装，改造基于https://github.com/desienkz-slp/radius-ui
+将英文改为简体中文，并且删除WireGuard和L2TP的安装，增加ocserv群组支持（添加新用户组--附加属性（高级）--Class（ocserv 用户组）然后选择:=(设置)--填入ocserv的群组名）
+## 安装方法
 
-## Cara Instalasi
 
-1. Download atau *clone* seluruh isi repositori ini ke server Linux Ubuntu 22.04 / 20.04 yang masih bersih (Fresh Install).
-2. Masuk ke direktori repositori ini (`cd radius-ui` atau sesuai nama foldernya).
-3. Jalankan perintah instalasi otomatis sebagai `root`:
+1. 一个干净的debian 12/Ubuntu 22.04/20.04 Linux服务器（全新安装）。
+2. 运行自动安装命令如下 `root`:
    ```bash
-   apt update && apt install git -y
-   git clone https://github.com/desienkz-slp/radius-ui.git
+   apt update && apt install git sudo -y
+   git clone https://github.com/pandafastvpn/radius-ui.git
    cd radius-ui
    sudo bash install.sh
    ```
-4. Tunggu hingga proses selesai. Semua *service* (Nginx, MariaDB, Node.js, FreeRADIUS) akan dipasang otomatis.
+4. 等待流程完成。所有服务（Nginx、MariaDB、Node.js、FreeRADIUS、WireGuard、L2TP）都将自动完成安装。
 
-## Login Default
+## 默认登录信息
 
-Setelah instalasi selesai, buka IP Address server Anda di browser (misal: `http://192.168.1.10` atau domain).
 
-- **Username Default**: `superadmin`
-- **Password Default**: `admin123`
+安装完成后，在浏览器中访问服务器的IP地址（或者域名）。
+'http://192.168.1.10'（替换自己的ip或域名）
 
-âš ï¸ **Sangat disarankan** untuk segera mengganti password `superadmin` setelah berhasil login pertama kali demi keamanan server Anda.
 
-## Cara Update (Pembaruan)
 
-Mulai versi terbaru, NETORA-Radius mendukung pembaruan otomatis (Auto-Update) langsung dari Web UI (Dashboard Admin).
+- **默认用户名**: `superadmin`
+- **默认密码**: `admin123`
 
-### Opsi 1: Auto-Update via Web UI (Rekomendasi)
-Jika ada rilis terbaru di GitHub, akan muncul tombol **Update Available** di pojok kanan atas panel *Header* Anda. Cukup klik tombol tersebut untuk mengupdate dan me-restart sistem secara otomatis.
+强烈建议在首次成功登录后立即更改密码，以保障服务器安全
 
-**PENTING: Konfigurasi Git Passwordless**
-Agar fitur Auto-Update Web UI berfungsi di latar belakang tanpa terhenti karena meminta password, jalankan perintah ini **satu kali saja** di terminal server Anda:
-```bash
-cd /var/www/radius-ui  # Atau direktori tempat Anda men-clone repo
-git config --global --add safe.directory /var/www/radius-ui
-git pull origin main
-```
 
-### Opsi 2: Update Manual via Terminal
-Jika Anda sedang menggunakan terminal SSH:
-1. Masuk ke folder *clone* repositori Anda:
-   ```bash
-   cd /var/www/radius-ui
-   ```
-2. Jalankan script update:
-   ```bash
-   bash update.sh
-   ```
 
-*(Jika Anda mendapati error "fatal: not a git repository" saat update, itu berarti server Anda belum terhubung dengan Git. Jalankan perintah ini: `git init && git remote add origin https://github.com/desienkz-slp/radius-ui.git && git fetch && git reset --hard origin/main`)*
+## 其他的参考原作者
 
-## Catatan Penting
-
-### Username dengan Karakter `@` (Email)
-Secara bawaan (*default*), FreeRADIUS memotong nama user di belakang tanda `@` karena menganggapnya sebagai *realm* (domain). Ini akan menyebabkan user dengan tanda `@` gagal terhubung (Authentication Failed) karena namanya tidak akan ditemukan di database.
-
-Untuk mengatasi hal ini dan mengizinkan pemakaian tanda `@` di Username PPP, Anda wajib mematikan modul `suffix` pada server Radius secara manual. Jalankan perintah ini di Terminal/SSH Anda (cukup sekali di awal instalasi):
-
-```bash
-sed -i 's/^[[:space:]]*suffix/#\tsuffix/g' /etc/freeradius/3.0/sites-enabled/default && systemctl restart freeradius
-```
